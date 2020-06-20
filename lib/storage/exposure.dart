@@ -11,8 +11,13 @@ class ExposureModel {
   final int transmissionRiskLevel;
   bool reported;
 
-  ExposureModel(this.id, this.date, this.duration, this.totalRiskScore,
-      this.transmissionRiskLevel, this.reported);
+  ExposureModel(
+      {this.id,
+      this.date,
+      this.duration,
+      this.totalRiskScore,
+      this.transmissionRiskLevel,
+      this.reported});
 
   Future<void> destroy() async {
     final Database db = await Storage.db;
@@ -79,12 +84,12 @@ class ExposureModel {
     return List.generate(
         rows.length,
         (index) => ExposureModel(
-              rows[index]['id'],
-              DateTime.parse(rows[index]['date']),
-              Duration(minutes: rows[index]['duration']),
-              rows[index]['total_risk_score'],
-              rows[index]['transmission_risk_level'],
-              rows[index]['reported'] == 1,
+              id: rows[index]['id'],
+              date: DateTime.parse(rows[index]['date']),
+              duration: Duration(minutes: rows[index]['duration']),
+              totalRiskScore: rows[index]['total_risk_score'],
+              transmissionRiskLevel: rows[index]['transmission_risk_level'],
+              reported: rows[index]['reported'] == 1,
             ));
   }
 }

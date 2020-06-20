@@ -1,4 +1,5 @@
 import 'package:sqflite/sqflite.dart';
+import 'package:ug_covid_trace/utils/operator.dart';
 
 import 'db.dart';
 
