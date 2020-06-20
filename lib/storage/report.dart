@@ -6,7 +6,7 @@ class ReportModel {
   final String lastExposureKey;
   final DateTime timeStamp;
 
-  ReportModel(this.id, this.lastExposureKey, this.timeStamp);
+  ReportModel({this.id, this.lastExposureKey, this.timeStamp});
 
   create() async {
     final Database db = await Storage.db;
@@ -30,7 +30,9 @@ class ReportModel {
     if (rows.length == 0) {
       return null;
     }
-    return ReportModel(rows[0]['id'], rows[0]['last_exposure_key'],
-        DateTime.parse(rows[0]['timestamp']));
+    return ReportModel(
+        id: rows[0]['id'],
+        lastExposureKey: rows[0]['last_exposure_key'],
+        timeStamp: DateTime.parse(rows[0]['timestamp']));
   }
 }

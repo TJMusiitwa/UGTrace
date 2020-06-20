@@ -82,9 +82,12 @@ class SettingsScreen extends StatelessWidget {
           title: Text('Terms of Service'),
           trailing: Icon(context.platformIcons.rightChevron),
         ),
-        AboutListTile(
-          child: Text('About Ug Covid Trace'),
-          applicationName: 'Ug Covid Trace',
+        ListTile(
+          title: Text('About UGTrace'),
+          onTap: () => showLicensePage(
+              context: context,
+              applicationName: 'UGTrace',
+              applicationVersion: '0.0.1'),
         ),
         ListTile(
           title: Text('Delete Data'),
