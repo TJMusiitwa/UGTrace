@@ -1,6 +1,7 @@
+import 'dart:convert';
+
 import 'package:http/http.dart' as http;
 import 'package:jaguar_jwt/jaguar_jwt.dart';
-import 'dart:convert';
 
 import 'config.dart';
 

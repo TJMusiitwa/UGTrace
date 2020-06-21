@@ -62,7 +62,7 @@ class _VerifyPhoneState extends State<VerifyPhone>
 
   Future<void> verifyCode(String code) async {
     setState(() => _loading = true);
-    var token = Operator.verify(_phoneToken, code);
+    var token = await Operator.verify(_phoneToken, code);
     setState(() => _loading = false);
 
     if (token == null) {

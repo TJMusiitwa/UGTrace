@@ -1,205 +1,444 @@
 import 'dart:io';
 
+import 'package:cupertino_stepper/cupertino_stepper.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_platform_widgets/flutter_platform_widgets.dart';
-import 'package:ug_covid_trace/nav.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import 'package:ug_covid_trace/state.dart';
+import 'package:ug_covid_trace/utils/config.dart';
+import 'package:ug_covid_trace/utils/operator.dart';
+
+import 'code_pin.dart';
+import 'verify_phone.dart';
 
 class NotifyEntryFormScreen extends StatefulWidget {
   @override
   _NotifyEntryFormScreenState createState() => _NotifyEntryFormScreenState();
 }
 
-class _NotifyEntryFormScreenState extends State<NotifyEntryFormScreen> {
-  TextEditingController _testID, _testDate;
+class _NotifyEntryFormScreenState extends State<NotifyEntryFormScreen>
+    with TickerProviderStateMixin {
+  var _loading = false;
+  var _step = 0;
+  var _verificationCode = '';
+  bool _expandHeader = false;
+  AnimationController expandController;
+  CurvedAnimation curvedAnimation;
 
   @override
   void initState() {
     super.initState();
-    _testID = TextEditingController(text: '');
-    _testDate = TextEditingController(text: '');
+    expandController =
+        AnimationController(vsync: this, duration: Duration(milliseconds: 200));
+    curvedAnimation =
+        CurvedAnimation(parent: expandController, curve: Curves.fastOutSlowIn);
+    Provider.of<AppState>(context, listen: false).addListener(onStateChanged);
   }
 
-  @override
-  void dispose() {
-    _testID.dispose();
-    _testDate.dispose();
-    super.dispose();
+  void onStateChanged() async {
+    AppState state = Provider.of<AppState>(context, listen: false);
+    if (state.report != null) {
+      expandController.forward();
+      setState(() => _expandHeader = true);
+    }
+  }
+
+  void onSubmit(context, AppState state) async {
+    if (!await sendReport(state)) {
+      Scaffold.of(context).showSnackBar(SnackBar(
+        content: Text('There was an error submitting your report'),
+        backgroundColor: Colors.deepOrange,
+      ));
+    } else {
+      Scaffold.of(context).showSnackBar(SnackBar(
+        content: Text('Your report was successfully submitted'),
+        backgroundColor: Colors.green,
+      ));
+    }
+  }
+
+  Future<bool> sendReport(AppState state) async {
+    setState(() => _loading = true);
+    var success = await state.sendReport(_verificationCode);
+    setState(() => _loading = false);
+
+    return success;
+  }
+
+  Future<Token> verifyPhone() {
+    return showPlatformModalSheet(
+        context: context,
+        builder: (context) => VerifyPhone(),
+        androidIsScrollControlled: true);
+  }
+
+  void onCodeChange(context, String code) {
+    setState(() => _verificationCode = code);
+    if (codeComplete) {
+      FocusScope.of(context).unfocus();
+    }
+  }
+
+  bool get codeComplete => _verificationCode.length == 6;
+
+  List<Widget> getHeading(String title) {
+    var authority = Config.get()["healthAuthority"];
+    return [
+      SizedBox(height: 20),
+      Center(
+        child:
+            Text(authority['name'], style: Theme.of(context).textTheme.caption),
+      ),
+      Center(
+          child: Text(
+              'Updated ${DateFormat.yMMMd().format(DateTime.parse(authority['updated']))}',
+              style: Theme.of(context).textTheme.caption)),
+      SizedBox(height: 10),
+      Center(child: Text(title, style: Theme.of(context).textTheme.subtitle1)),
+      SizedBox(height: 10),
+    ];
+  }
+
+  Widget buildReportedView(BuildContext context, AppState state) {
+    var alertText = TextStyle(color: Colors.white);
+
+    return Padding(
+      padding: EdgeInsets.only(left: 15, right: 15),
+      child: ListView(children: [
+        SizedBox(height: 15),
+        Container(
+          decoration: BoxDecoration(
+              color: Colors.blueGrey, borderRadius: BorderRadius.circular(10)),
+          child: InkWell(
+            onTap: () {
+              setState(() => _expandHeader = !_expandHeader);
+              _expandHeader
+                  ? expandController.forward()
+                  : expandController.reverse();
+            },
+            child: Padding(
+              padding: EdgeInsets.all(15),
+              child: Column(
+                children: [
+                  Row(children: [
+                    Expanded(
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                          Text('Report Submitted',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .headline6
+                                  .merge(alertText)),
+                          SizedBox(height: 2),
+                          Text(
+                              'On ${DateFormat.yMMMd().add_jm().format(state.report.timeStamp)}',
+                              style: alertText)
+                        ])),
+                    FaIcon(FontAwesomeIcons.clinicMedical, size: 20)
+                  ]),
+                  SizeTransition(
+                      child: Column(children: [
+                        Divider(height: 20, color: Colors.white),
+                        Text(
+                            'Thank you for submitting your anonymized exposure history. Your data will help people at risk respond faster.',
+                            style: alertText),
+                        Divider(height: 20, color: Colors.white),
+                        Text(
+                            'We continue to remind you to follow the prevention guidelines in place to stop further spread of the disease'),
+                      ]),
+                      axisAlignment: 1.0,
+                      sizeFactor: curvedAnimation),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ]),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return PlatformScaffold(
-      appBar: PlatformAppBar(automaticallyImplyLeading: true),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(vertical: 15.0, horizontal: 10.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.start,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            Text(
-              'Share your test result & notify others',
-              style: Theme.of(context).textTheme.headline4,
-            ),
-            SizedBox(height: 20),
-            Text(
-                'Only those who have been exposed will receive a notification'),
-            SizedBox(height: 20),
-            Text(
-                'Please enter your unique test identifier to verify your positive result'),
-            SizedBox(height: 20),
-            PlatformTextField(
-              controller: _testID,
-              textInputAction: TextInputAction.done,
-              textAlign: TextAlign.center,
-              android: (_) => MaterialTextFieldData(
-                decoration: InputDecoration(
-                  labelText: 'Test ID',
-                  border: OutlineInputBorder(),
-                  suffixIcon: IconButton(
-                      icon: Icon(Icons.clear),
-                      onPressed: () => _testID.clear()),
-                ),
-              ),
-              ios: (_) => CupertinoTextFieldData(
-                decoration: BoxDecoration(
-                  border: Border.all(),
-                  borderRadius: BorderRadius.circular(4.0),
-                ),
-                placeholder: 'Test ID',
-                clearButtonMode: OverlayVisibilityMode.editing,
-              ),
-            ),
-            Divider(height: 2.0),
-            SizedBox(height: 20),
-            Text(
-                'Please enter your test date as this enables the app to know when you might have been infectious and in turn notify the right people of ppossible exposure'),
-            SizedBox(height: 20),
-            PlatformTextField(
-              controller: _testDate,
-              textInputAction: TextInputAction.done,
-              textAlign: TextAlign.center,
-              onTap: () {
-                if (Platform.isAndroid) {
-                  showDatePicker(
-                    context: context,
-                    initialDate: DateTime.now(),
-                    firstDate: DateTime(2020, 3, 21),
-                    lastDate: DateTime(2025),
-                  ).then((tested) {
-                    setState(() => _testDate.text = tested.toIso8601String());
-                  });
-                } else if (Platform.isIOS) {
-                  CupertinoDatePicker(
-                      mode: CupertinoDatePickerMode.date,
-                      minimumDate: DateTime(2020, 3, 21),
-                      minimumYear: 2019,
-                      onDateTimeChanged: (DateTime tested) {
-                        setState(() => _testDate.text = tested.toString());
-                      });
-                }
-              },
-              android: (_) => MaterialTextFieldData(
-                decoration: InputDecoration(
-                  labelText: 'Test Date',
-                  border: OutlineInputBorder(),
-                  suffixIcon: IconButton(
-                      icon: Icon(Icons.clear),
-                      onPressed: () => _testID.clearComposing()),
-                ),
-              ),
-              ios: (_) => CupertinoTextFieldData(
-                decoration: BoxDecoration(
-                  border: Border.all(),
-                  borderRadius: BorderRadius.circular(4.0),
-                ),
-                placeholder: 'Test Date',
-                clearButtonMode: OverlayVisibilityMode.never,
-              ),
-            ),
-            SizedBox(height: 20),
-            PlatformButton(
-                child: PlatformText('Next'),
-                onPressed: () {
-                  showPlatformDialog(
-                    builder: (_) => PlatformAlertDialog(
-                      title: Text(
-                          'Share your random IDs from this device with Ug Covid Trace?'),
-                      content: Text(
-                          "Sharing your random IDs from the past 14 days helps the app to determine who should be notified that they may have been exposed to COVID-19.\n\n Your identity and test result won't be shared with other people"),
-                      actions: <Widget>[
-                        PlatformDialogAction(
-                          child: Text('Cancel'),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                        PlatformDialogAction(
-                          child: Text('Share'),
-                          onPressed: () {
-                            //Call the share positive results api endpoint and post to server.
-                            print(_testID.text);
-                            print(_testDate.text);
-                            Navigator.of(context).pushReplacement(
-                                platformPageRoute(
-                                    builder: (_) => SharingSuccessPage(),
-                                    context: context));
-                          },
-                        ),
+    var enableContinue = true;
+    var textTheme = Theme.of(context).textTheme;
+    var stepTextTheme = textTheme.subtitle1;
+
+    return Consumer<AppState>(
+      builder: (BuildContext context, AppState state, Widget child) {
+        if (state.report != null) {
+          return PlatformScaffold(
+            body: buildReportedView(context, state),
+          );
+        }
+        return PlatformScaffold(
+          body: GestureDetector(
+              onTap: () => FocusScope.of(context).unfocus(),
+              child: Builder(
+                builder: (context) {
+                  return SingleChildScrollView(
+                    child: Column(
+                      children: <Widget>[
+                        Platform.isIOS
+                            ? CupertinoStepper(
+                                currentStep: _step,
+                                type: StepperType.vertical,
+                                onStepContinue: () => setState(() => _step++),
+                                onStepTapped: (value) =>
+                                    setState(() => _step = value),
+                                onStepCancel: () =>
+                                    _step == 0 ? null : setState(() => _step--),
+                                controlsBuilder: (context,
+                                    {onStepCancel, onStepContinue}) {
+                                  return _step < 2
+                                      ? Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.end,
+                                          children: <Widget>[
+                                            CupertinoButton(
+                                                color:
+                                                    CupertinoColors.activeBlue,
+                                                onPressed: enableContinue
+                                                    ? onStepContinue
+                                                    : null,
+                                                child: Text('Continue')),
+                                          ],
+                                        )
+                                      : SizedBox.shrink();
+                                },
+                                steps: [
+                                    Step(
+                                      title: Text('Notify Others',
+                                          style: textTheme.headline6),
+                                      content: Text(
+                                        'If you have tested postive for COVID-19, anonymously sharing your diagnosis will help your community contain the spread of the virus.\n\nOnly those who have been exposed will receive a notification.\n\nThis submission is optional.',
+                                        style: stepTextTheme,
+                                        softWrap: true,
+                                      ),
+                                    ),
+                                    Step(
+                                        isActive: _step == 1,
+                                        state: _step > 1
+                                            ? StepState.complete
+                                            : StepState.indexed,
+                                        title: Text('What Will Be Shared',
+                                            style: textTheme.headline6),
+                                        content: Column(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.start,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'The random IDs generated by your phone and anonymously exchanged with others you have interacted with over the last 14 days will be shared.\n\nThis app neither collects nor shares any user identifiable information.',
+                                                style: stepTextTheme,
+                                                softWrap: true,
+                                              ),
+                                            ])),
+                                    Step(
+                                        isActive: _step == 2,
+                                        title: Text('Verify Diagnosis',
+                                            style: textTheme.headline6),
+                                        content: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                  'Enter the verification code provided by your health official to submit your report.',
+                                                  style: stepTextTheme),
+                                              Material(
+                                                child: CodePin(
+                                                    size: 6,
+                                                    onChange: (value) =>
+                                                        onCodeChange(
+                                                            context, value)),
+                                              ),
+                                              SizedBox(height: 10),
+                                              Row(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.end,
+                                                  children: [
+                                                    CupertinoButton(
+                                                        padding: EdgeInsets
+                                                            .symmetric(
+                                                                horizontal: 40),
+                                                        color: CupertinoColors
+                                                            .activeBlue,
+                                                        child: _loading
+                                                            ? SizedBox(
+                                                                height: 20,
+                                                                width: 20,
+                                                                child:
+                                                                    CupertinoActivityIndicator(),
+                                                              )
+                                                            : Text("Submit"),
+                                                        onPressed: codeComplete
+                                                            ? () => onSubmit(
+                                                                context, state)
+                                                            : null),
+                                                  ]),
+                                            ])),
+                                  ])
+                            : Stepper(
+                                currentStep: _step,
+                                type: StepperType.vertical,
+                                onStepContinue: () => setState(() => _step++),
+                                onStepTapped: (value) =>
+                                    setState(() => _step = value),
+                                onStepCancel: () =>
+                                    _step == 0 ? null : setState(() => _step--),
+                                controlsBuilder: (context,
+                                    {onStepCancel, onStepContinue}) {
+                                  return _step < 2
+                                      ? ButtonBar(
+                                          alignment: MainAxisAlignment.start,
+                                          children: <Widget>[
+                                            RaisedButton(
+                                                elevation: 0,
+                                                color: Theme.of(context)
+                                                    .buttonTheme
+                                                    .colorScheme
+                                                    .primary,
+                                                onPressed: enableContinue
+                                                    ? onStepContinue
+                                                    : null,
+                                                child: Text('Continue')),
+                                          ],
+                                        )
+                                      : SizedBox.shrink();
+                                },
+                                steps: [
+                                    Step(
+                                      title: Text('Notify Others',
+                                          style: textTheme.headline6),
+                                      content: Text(
+                                        'If you have tested postive for COVID-19, anonymously sharing your diagnosis will help your community contain the spread of the virus.\n\nOnly those who have been exposed will receive a notification.\n\nThis submission is optional.',
+                                        style: stepTextTheme,
+                                        softWrap: true,
+                                      ),
+                                    ),
+                                    Step(
+                                        isActive: _step == 1,
+                                        state: _step > 1
+                                            ? StepState.complete
+                                            : StepState.indexed,
+                                        title: Text('What Will Be Shared',
+                                            style: textTheme.headline6),
+                                        content: Column(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.start,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'The random IDs generated by your phone and anonymously exchanged with others you have interacted with over the last 14 days will be shared.\n\nThis app neither collects nor shares any user identifiable information.',
+                                                style: stepTextTheme,
+                                                softWrap: true,
+                                              ),
+                                            ])),
+                                    Step(
+                                        isActive: _step == 2,
+                                        title: Text('Verify Diagnosis',
+                                            style: textTheme.headline6),
+                                        content: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                  'Enter the verification code provided by your health official to submit your report.',
+                                                  style: stepTextTheme),
+                                              CodePin(
+                                                  size: 6,
+                                                  onChange: (value) =>
+                                                      onCodeChange(
+                                                          context, value)),
+                                              SizedBox(height: 10),
+                                              ButtonBar(
+                                                  alignment:
+                                                      MainAxisAlignment.start,
+                                                  children: [
+                                                    RaisedButton(
+                                                        padding: EdgeInsets
+                                                            .symmetric(
+                                                                horizontal: 40),
+                                                        color: Theme.of(context)
+                                                            .buttonTheme
+                                                            .colorScheme
+                                                            .primary,
+                                                        child: _loading
+                                                            ? SizedBox(
+                                                                height: 20,
+                                                                width: 20,
+                                                                child:
+                                                                    CircularProgressIndicator(
+                                                                  strokeWidth:
+                                                                      2,
+                                                                  value: null,
+                                                                  valueColor:
+                                                                      AlwaysStoppedAnimation(
+                                                                          Colors
+                                                                              .white),
+                                                                ),
+                                                              )
+                                                            : Text("Submit"),
+                                                        onPressed: codeComplete
+                                                            ? () => onSubmit(
+                                                                context, state)
+                                                            : null),
+                                                  ]),
+                                            ])),
+                                  ])
                       ],
                     ),
-                    context: context,
                   );
-                }),
-            SizedBox(height: 20),
-            PlatformButton(
-              child: PlatformText('Cancel'),
-              onPressed: () => Navigator.pop(context),
-              androidFlat: (_) => MaterialFlatButtonData(),
-            )
-          ],
-        ),
-      ),
+                },
+              )),
+        );
+      },
     );
   }
 }
 
-class SharingSuccessPage extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return PlatformScaffold(
-      body: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 15.0),
-        child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Thank you for sharing your test result',
-                style: Theme.of(context).textTheme.headline4,
-              ),
-              SizedBox(height: 20),
-              Text(
-                  'We continue to remind you to follow the prevention guidelines in place to stop further spread of the disease'),
-              Expanded(
-                child: Align(
-                  alignment: FractionalOffset.bottomCenter,
-                  child: Padding(
-                      padding: EdgeInsets.only(bottom: 10.0),
-                      child: PlatformButton(
-                        child: PlatformText('Done'),
-                        onPressed: () {
-                          Navigator.pushReplacement(
-                              context,
-                              platformPageRoute(
-                                  builder: (_) => TraceNav(),
-                                  context: context));
-                        },
-                      )),
-                ),
-              )
-            ]),
-      ),
-    );
-  }
-}
+// class SharingSuccessPage extends StatelessWidget {
+//   @override
+//   Widget build(BuildContext context) {
+//     return PlatformScaffold(
+//       body: Padding(
+//         padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 15.0),
+//         child: Column(
+//             mainAxisAlignment: MainAxisAlignment.center,
+//             crossAxisAlignment: CrossAxisAlignment.stretch,
+//             children: [
+//               Text(
+//                 'Thank you for sharing your test result',
+//                 style: Theme.of(context).textTheme.headline4,
+//               ),
+//               SizedBox(height: 20),
+//               Text(
+//                   'We continue to remind you to follow the prevention guidelines in place to stop further spread of the disease'),
+//               Expanded(
+//                 child: Align(
+//                   alignment: FractionalOffset.bottomCenter,
+//                   child: Padding(
+//                       padding: EdgeInsets.only(bottom: 10.0),
+//                       child: PlatformButton(
+//                         child: PlatformText('Done'),
+//                         onPressed: () {
+//                           Navigator.pushReplacement(
+//                               context,
+//                               platformPageRoute(
+//                                   builder: (_) => TraceNav(),
+//                                   context: context));
+//                         },
+//                       )),
+//                 ),
+//               )
+//             ]),
+//       ),
+//     );
+//   }
+// }
