@@ -43,6 +43,12 @@
 	<false/>
 	<key>UIStatusBarHidden</key>
 	<true/>
+	<key>io.flutter.embedded_views_preview</key>
+    <string>YES</string>
+	<key>NSCameraUsageDescription</key>
+    <string>We use your camera to provide an Augmented Reality Social Distancing Experience.</string>
+
+
 
 </dict>
 </plist>
